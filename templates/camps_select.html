@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1>🎯 Choix du Camp</h1>
+        <p class="lead">Choisissez votre camp pour participer au CTF</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            
+            <!-- Statut actuel -->
+            {% if current_camp %}
+            <div class="alert alert-info">
+                <h4>Votre camp actuel :</h4>
+                <h2>
+                    {% if current_camp == 'blue' %}
+                        🔵 <strong>Camp Bleu</strong> (Défenseurs)
+                    {% elif current_camp == 'red' %}
+                        🔴 <strong>Camp Rouge</strong> (Attaquants)
+                    {% endif %}
+                </h2>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <h4>⚠️ Aucun camp sélectionné</h4>
+                <p>Vous devez choisir un camp pour accéder aux challenges !</p>
+            </div>
+            {% endif %}
+            
+            <!-- Info deadline SEULEMENT si l'option est activée -->
+            {% if deadline and allow_change %}
+            <div class="alert {% if can_change %}alert-warning{% else %}alert-danger{% endif %} mt-2">
+                <strong>⏰ {% if can_change %}Attention{% else %}Date limite dépassée{% endif %} :</strong> 
+                {% if can_change %}
+                    Vous pouvez changer de camp jusqu'au <strong>{{ deadline }}</strong>
+                {% else %}
+                    La date limite était le <strong>{{ deadline }}</strong>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            <!-- Message d'erreur si changement bloqué -->
+            {% if not can_change %}
+            <div class="alert alert-danger">
+                <h4>🔒 Changement de camp bloqué</h4>
+                <p>{{ change_error }}</p>
+            </div>
+            {% endif %}
+            
+            <!-- Sélection de camp -->
+            <div class="row mt-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card border-primary {% if current_camp == 'blue' %}bg-light{% endif %}" style="height: 100%;">
+                        <div class="card-body text-center">
+                            <h2 class="card-title">🔵 Camp Bleu</h2>
+                            <h5 class="text-muted">Défenseurs</h5>
+                            <p class="card-text mt-3">
+                                Protégez les systèmes et infrastructures contre les attaques.
+                                Analysez les logs, renforcez la sécurité, détectez les intrusions.
+                            </p>
+                            <ul class="list-unstyled mt-3">
+                                <li>🛡️ Challenges de défense</li>
+                                <li>🔍 Analyse forensics</li>
+                                <li>🚨 Détection d'incidents</li>
+                            </ul>
+                            {% if current_camp == 'blue' %}
+                                <button class="btn btn-primary btn-lg mt-3" disabled>✓ Camp actuel</button>
+                            {% elif not can_change %}
+                                <button class="btn btn-outline-primary btn-lg mt-3" disabled>🔒 Changement bloqué</button>
+                            {% else %}
+                                <button class="btn btn-outline-primary btn-lg mt-3" onclick="selectCamp('blue')">
+                                    Rejoindre le Camp Bleu
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card border-danger {% if current_camp == 'red' %}bg-light{% endif %}" style="height: 100%;">
+                        <div class="card-body text-center">
+                            <h2 class="card-title">🔴 Camp Rouge</h2>
+                            <h5 class="text-muted">Attaquants</h5>
+                            <p class="card-text mt-3">
+                                Exploitez les vulnérabilités et pénétrez les systèmes adverses.
+                                Trouvez les failles, développez des exploits, contournez les protections.
+                            </p>
+                            <ul class="list-unstyled mt-3">
+                                <li>⚔️ Challenges d'attaque</li>
+                                <li>💉 Exploitation de vulnérabilités</li>
+                                <li>🎯 Pentest offensif</li>
+                            </ul>
+                            {% if current_camp == 'red' %}
+                                <button class="btn btn-danger btn-lg mt-3" disabled>✓ Camp actuel</button>
+                            {% elif not can_change %}
+                                <button class="btn btn-outline-danger btn-lg mt-3" disabled>🔒 Changement bloqué</button>
+                            {% else %}
+                                <button class="btn btn-outline-danger btn-lg mt-3" onclick="selectCamp('red')">
+                                    Rejoindre le Camp Rouge
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+function selectCamp(camp) {
+    if (!['blue', 'red'].includes(camp)) {
+        alert('Camp invalide');
+        return;
+    }
+    
+    if (!confirm(`Êtes-vous sûr de vouloir rejoindre le camp ${camp === 'blue' ? 'Bleu' : 'Rouge'} ?`)) {
+        return;
+    }
+    
+    fetch('/api/v1/camps/select', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'CSRF-Token': window.init.csrfNonce
+        },
+        body: JSON.stringify({ camp: camp })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ Erreur: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        alert('❌ Erreur lors de la sélection du camp');
+    });
+}
+</script>
+{% endblock %}

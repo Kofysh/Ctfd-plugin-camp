@@ -1,0 +1,225 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1>🎯 Gestion des Camps</h1>
+        <p class="lead">Configuration du système Bleu vs Rouge</p>
+        <a href="/admin/camps/logs" class="btn btn-warning">
+            <i class="fas fa-shield-alt"></i> Voir les logs de sécurité
+        </a>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Configuration -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>⚙️ Configuration</h3>
+                </div>
+                <div class="card-body">
+                    <form id="config-form">
+                        <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="allow-change" 
+                                       {% if config.allow_change %}checked{% endif %}>
+                                <label class="custom-control-label" for="allow-change">
+                                    <strong>Autoriser le changement de camp</strong>
+                                    <br><small class="text-muted">Si désactivé, une fois le camp choisi, il ne peut plus être modifié</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="deadline"><strong>Date limite de changement</strong></label>
+                            <input type="datetime-local" class="form-control" id="deadline" 
+                                   value="{{ config.deadline[:16] if config.deadline else '' }}">
+                            <small class="form-text text-muted">
+                                Après cette date, aucun changement ne sera possible, même si l'option est activée
+                            </small>
+                        </div>
+                        
+                        {% if config.deadline %}
+                        <div class="alert {% if config.deadline_passed %}alert-danger{% else %}alert-success{% endif %}">
+                            {% if config.deadline_passed %}
+                                🔴 <strong>Date limite dépassée</strong> - Les changements de camp sont bloqués
+                            {% else %}
+                                🟢 <strong>Changements autorisés</strong> jusqu'au {{ config.deadline[:16].replace('T', ' ') }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <button type="submit" class="btn btn-primary">💾 Sauvegarder la configuration</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h5 class="card-title">🔵 Camp Bleu</h5>
+                    <h2>{{ stats.blue }}</h2>
+                    <p class="mb-0">équipes</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h5 class="card-title">🔴 Camp Rouge</h5>
+                    <h2>{{ stats.red }}</h2>
+                    <p class="mb-0">équipes</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-secondary">
+                <div class="card-body">
+                    <h5 class="card-title">⚪ Non assignées</h5>
+                    <h2>{{ stats.unassigned }}</h2>
+                    <p class="mb-0">équipes</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-dark">
+                <div class="card-body">
+                    <h5 class="card-title">📊 Total</h5>
+                    <h2>{{ stats.total }}</h2>
+                    <p class="mb-0">équipes</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des équipes -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Gestion des équipes</h3>
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nom de l'équipe</th>
+                                <th>Camp actuel</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for team in teams %}
+                            <tr id="team-{{ team.id }}">
+                                <td>{{ team.id }}</td>
+                                <td>{{ team.name }}</td>
+                                <td>
+                                    <span class="badge badge-pill 
+                                        {% if team.camp == 'blue' %}badge-primary
+                                        {% elif team.camp == 'red' %}badge-danger
+                                        {% else %}badge-secondary{% endif %}">
+                                        {% if team.camp == 'blue' %}🔵 Camp Bleu
+                                        {% elif team.camp == 'red' %}🔴 Camp Rouge
+                                        {% else %}⚪ Non assigné{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-primary" onclick="updateCamp({{ team.id }}, 'blue')">
+                                            🔵 Bleu
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="updateCamp({{ team.id }}, 'red')">
+                                            🔴 Rouge
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary" onclick="updateCamp({{ team.id }}, 'none')">
+                                            ❌ Retirer
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Sauvegarder la configuration
+document.getElementById('config-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const allowChange = document.getElementById('allow-change').checked;
+    const deadline = document.getElementById('deadline').value;
+    
+    // Convertir en format ISO si une date est sélectionnée
+    let deadlineISO = '';
+    if (deadline) {
+        deadlineISO = new Date(deadline).toISOString();
+    }
+    
+    fetch('/admin/camps/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'CSRF-Token': window.init.csrfNonce
+        },
+        body: JSON.stringify({
+            allow_change: allowChange,
+            deadline: deadlineISO
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Configuration sauvegardée !');
+            location.reload();
+        } else {
+            alert('❌ Erreur: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        alert('❌ Erreur lors de la sauvegarde');
+    });
+});
+
+// Mettre à jour le camp d'une équipe
+function updateCamp(teamId, camp) {
+    if (!['blue', 'red', 'none'].includes(camp)) {
+        alert('Camp invalide');
+        return;
+    }
+    
+    fetch(`/admin/camps/team/${teamId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'CSRF-Token': window.init.csrfNonce
+        },
+        body: JSON.stringify({ camp: camp })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erreur: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la mise à jour');
+    });
+}
+</script>
+{% endblock %}

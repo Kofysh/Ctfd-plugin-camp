@@ -1,0 +1,142 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1>🚨 Logs des tentatives d'accès</h1>
+        <p class="lead">Détection des équipes tentant d'accéder aux challenges d'autres camps</p>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h5 class="card-title">🚨 Total tentatives</h5>
+                    <h2>{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">👥 Équipes impliquées</h5>
+                    <h2>{{ stats.unique_teams }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h5 class="card-title">📋 Logs affichés</h5>
+                    <h2>{{ stats.shown }}</h2>
+                    <small>(100 derniers)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <button class="btn btn-danger" onclick="clearLogs()">
+                <i class="fas fa-trash"></i> Supprimer tous les logs
+            </button>
+            <a href="/admin/camps" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Retour
+            </a>
+        </div>
+    </div>
+
+    <!-- Tableau des logs -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Logs d'accès illégitimes</h3>
+                </div>
+                <div class="card-body">
+                    {% if logs %}
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date/Heure</th>
+                                <th>Équipe</th>
+                                <th>Camp équipe</th>
+                                <th>Challenge visé</th>
+                                <th>Camp challenge</th>
+                                <th>Requête & IP</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.timestamp }}</td>
+                                <td>
+                                    <a href="/admin/teams/{{ log.team_id }}">
+                                        {{ log.team_name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge {% if log.team_camp == 'blue' %}badge-primary{% else %}badge-danger{% endif %}">
+                                        {% if log.team_camp == 'blue' %}🔵 Bleu{% else %}🔴 Rouge{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="/admin/challenges/{{ log.challenge_id }}">
+                                        {{ log.challenge_name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge {% if log.challenge_camp == 'blue' %}badge-primary{% else %}badge-danger{% endif %}">
+                                        {% if log.challenge_camp == 'blue' %}🔵 Bleu{% else %}🔴 Rouge{% endif %}
+                                    </span>
+                                </td>
+                                <td><code style="font-size: 0.85em;">{{ log.request_info }}</code></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <h4>✅ Aucune tentative d'accès suspecte</h4>
+                        <p>Toutes les équipes respectent les règles des camps !</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clearLogs() {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer TOUS les logs ?')) {
+        return;
+    }
+    
+    fetch('/admin/camps/logs/clear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'CSRF-Token': window.init.csrfNonce
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Logs supprimés !');
+            location.reload();
+        } else {
+            alert('❌ Erreur: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        alert('❌ Erreur lors de la suppression');
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,8 @@
+{
+  "name": "ctfd-camps",
+  "route": "/admin/camps",
+  "version": "1.0.0",
+  "description": "Plugin CTFd pour organiser les challenges par camps (Bleu vs Rouge)",
+  "author": "CTFd Community",
+  "requirements": []
+}
