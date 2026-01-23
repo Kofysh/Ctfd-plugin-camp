@@ -59,6 +59,48 @@ def can_change_camp(team_id):
     return True, "OK"
 
 
+def can_join_camp(camp, current_team_id=None):
+    """
+    Vérifie si une équipe peut rejoindre un camp spécifique
+    Prend en compte les limites de places
+    current_team_id : ID de l'équipe actuelle (pour ne pas se compter elle-même si elle change)
+    Retourne (bool, str) : (peut_rejoindre, raison_si_non)
+    """
+    # Vérifier si les limites sont activées
+    enable_limits = get_config('camps_enable_team_limits', default=False)
+    if not enable_limits:
+        return True, ""
+    
+    # Récupérer la limite pour ce camp
+    if camp == 'blue':
+        max_teams = get_config('camps_max_blue_teams', default=0)
+    elif camp == 'red':
+        max_teams = get_config('camps_max_red_teams', default=0)
+    else:
+        return False, "Camp invalide"
+    
+    # 0 = illimité
+    if max_teams == 0:
+        return True, ""
+    
+    # Compter le nombre d'équipes actuelles dans ce camp
+    current_count = TeamCamp.query.filter_by(camp=camp).count()
+    
+    # Si l'équipe change de camp (elle est déjà dans un camp), ne pas se compter
+    if current_team_id:
+        team_camp = TeamCamp.query.filter_by(team_id=current_team_id).first()
+        if team_camp and team_camp.camp == camp:
+            # L'équipe est déjà dans ce camp, pas de problème
+            return True, ""
+    
+    # Vérifier si le camp est plein
+    if current_count >= max_teams:
+        camp_name = "Bleu" if camp == 'blue' else "Rouge"
+        return False, f"Le camp {camp_name} est complet ({current_count}/{max_teams} équipes)"
+    
+    return True, ""
+
+
 def load_bp():
     """
     Créer et retourner le blueprint pour le plugin Camps
@@ -103,6 +145,11 @@ def load_bp():
         
         # Récupérer la configuration
         allow_change = get_config('camps_allow_change', default=True)
+        show_public_stats = get_config('camps_show_public_stats', default=False)
+        show_challenge_badges = get_config('camps_show_challenge_badges', default=False)
+        enable_team_limits = get_config('camps_enable_team_limits', default=False)
+        max_blue_teams = get_config('camps_max_blue_teams', default=0)
+        max_red_teams = get_config('camps_max_red_teams', default=0)
         deadline_str = get_config('camps_change_deadline', default='')
         
         # Formatter la deadline pour l'input datetime-local
@@ -125,6 +172,11 @@ def load_bp():
         
         config = {
             'allow_change': allow_change,
+            'show_public_stats': show_public_stats,
+            'show_challenge_badges': show_challenge_badges,
+            'enable_team_limits': enable_team_limits,
+            'max_blue_teams': max_blue_teams,
+            'max_red_teams': max_red_teams,
             'deadline': deadline_formatted,
             'deadline_passed': deadline_passed
         }
@@ -138,6 +190,11 @@ def load_bp():
         
         try:
             allow_change = request.json.get('allow_change', True)
+            show_public_stats = request.json.get('show_public_stats', False)
+            show_challenge_badges = request.json.get('show_challenge_badges', False)
+            enable_team_limits = request.json.get('enable_team_limits', False)
+            max_blue_teams = request.json.get('max_blue_teams', 0)
+            max_red_teams = request.json.get('max_red_teams', 0)
             deadline = request.json.get('deadline', '')  
             
             # La deadline arrive au format ISO depuis le frontend
@@ -152,9 +209,14 @@ def load_bp():
             
             # Sauvegarder la configuration
             set_config('camps_allow_change', allow_change)
+            set_config('camps_show_public_stats', show_public_stats)
+            set_config('camps_show_challenge_badges', show_challenge_badges)
+            set_config('camps_enable_team_limits', enable_team_limits)
+            set_config('camps_max_blue_teams', int(max_blue_teams))
+            set_config('camps_max_red_teams', int(max_red_teams))
             set_config('camps_change_deadline', deadline)
             
-            print(f"[CTFd Camps] Configuration sauvegardée - allow_change: {allow_change}, deadline: {deadline}")
+            print(f"[CTFd Camps] Configuration sauvegardée")
             
             return jsonify({'success': True, 'message': 'Configuration mise à jour'})
             
@@ -270,6 +332,30 @@ def load_bp():
         
         # Récupérer la configuration
         allow_change = get_config('camps_allow_change', default=True)
+        show_public_stats = get_config('camps_show_public_stats', default=False)
+        enable_team_limits = get_config('camps_enable_team_limits', default=False)
+        
+        # Récupérer les statistiques si l'une des options est activée
+        stats = None
+        if show_public_stats or enable_team_limits:
+            blue_count = TeamCamp.query.filter_by(camp='blue').count()
+            red_count = TeamCamp.query.filter_by(camp='red').count()
+            
+            stats = {
+                'blue': blue_count,
+                'red': red_count,
+                'show_counts': show_public_stats,  # Afficher les compteurs seulement si activé
+                'show_limits': enable_team_limits   # Afficher les limites seulement si activé
+            }
+            
+            # Ajouter les limites si activées
+            if enable_team_limits:
+                stats['blue_max'] = get_config('camps_max_blue_teams', default=0)
+                stats['red_max'] = get_config('camps_max_red_teams', default=0)
+        
+        # Vérifier si les camps sont disponibles
+        can_join_blue, blue_error = can_join_camp('blue', team.id)
+        can_join_red, red_error = can_join_camp('red', team.id)
         
         # Récupérer la deadline
         deadline_str = get_config('camps_change_deadline', default='')
@@ -286,8 +372,13 @@ def load_bp():
             current_camp=current_camp,
             can_change=can_change,
             allow_change=allow_change,
+            can_join_blue=can_join_blue,
+            can_join_red=can_join_red,
+            blue_error=blue_error,
+            red_error=red_error,
             change_error=error_msg if not can_change else None,
-            deadline=deadline_formatted
+            deadline=deadline_formatted,
+            stats=stats
         )
     
     @camps_bp.route('/api/v1/camps/select', methods=['POST'])
@@ -309,6 +400,11 @@ def load_bp():
         can_change, error_msg = can_change_camp(team.id)
         if not can_change:
             return jsonify({'success': False, 'error': error_msg}), 403
+        
+        # Vérifier si le camp n'est pas plein
+        can_join, join_error = can_join_camp(camp, team.id)
+        if not can_join:
+            return jsonify({'success': False, 'error': join_error}), 403
         
         try:
             # Créer ou mettre à jour le camp

@@ -48,11 +48,12 @@ def load(app):
             CampAccessLog.__table__.create(db.engine)
             print("[CTFd Camps] ✅ Table camp_access_logs créée !")
         else:
-            # DROP et recréer la table pour ajouter les nouvelles colonnes
-            print("[CTFd Camps] 🔨 DROP de la table camp_access_logs pour recréation...")
-            CampAccessLog.__table__.drop(db.engine)
-            CampAccessLog.__table__.create(db.engine)
-            print("[CTFd Camps] ✅ Table camp_access_logs recréée avec les nouvelles colonnes !")
+            print("[CTFd Camps] ℹ️ Table camp_access_logs existe déjà")
+            # DROP et recréer pour avoir la bonne taille de colonne (à utiliser seulement en cas de modification du modèle)
+            # print("[CTFd Camps] 🔨 DROP de la table camp_access_logs...")
+            # CampAccessLog.__table__.drop(db.engine)
+            # CampAccessLog.__table__.create(db.engine)
+            # print("[CTFd Camps] ✅ Table camp_access_logs recréée !")
     
     # Appliquer les patches admin
     patch_admin_challenges_listing(app)
@@ -203,22 +204,20 @@ def load(app):
                 if challenge_camp is not None and challenge_camp != team_camp:
                     print(f"[CTFd Camps] 🚨 ACCÈS REFUSÉ au challenge {challenge_id} (camp {challenge_camp}) pour l'équipe {team.name} (camp {team_camp})")
                     
-                    # Logger la tentative d'accès
+                    # Logger la tentative
                     try:
+                        request_info = f"{request.method} {request.url} (IP: {get_ip(req=request)})"
                         log_entry = CampAccessLog(
                             team_id=team.id,
                             challenge_id=challenge_id,
                             team_camp=team_camp,
                             challenge_camp=challenge_camp,
-                            ip_address=get_ip(req=request),
-                            request_method=request.method,
-                            request_url=request.url
+                            ip_address=request_info[:500]
                         )
                         db.session.add(log_entry)
                         db.session.commit()
-                        print(f"[CTFd Camps] 📝 Tentative d'accès loggée: {request.method} {request.url}")
                     except Exception as log_error:
-                        print(f"[CTFd Camps] ⚠️ Erreur lors du logging: {log_error}")
+                        print(f"[CTFd Camps] ⚠️ Erreur logging: {log_error}")
                         db.session.rollback()
                     
                     import json
@@ -278,6 +277,87 @@ def load(app):
             can_change_camp_for_display=can_change_camp_for_display,
             enrich_challenge=enrich_challenge
         )
+    
+    # Hook pour injecter le CSS/JS des pastilles de camp sur les challenges
+    @app.after_request
+    def inject_challenge_badges(response):
+        """Injecte le JavaScript pour afficher les pastilles de camp sur les challenges"""
+        
+        # Vérifier si on est sur la page challenges et si l'option est activée
+        if request.path == '/challenges' and response.status_code == 200:
+            show_badges = get_config('camps_show_challenge_badges', default=False)
+            
+            if show_badges:
+                # Récupérer les camps de tous les challenges
+                from CTFd.models import Challenges as ChallengesModel
+                challenges = ChallengesModel.query.filter_by(state='visible').all()
+                
+                camps_map = {}
+                for challenge in challenges:
+                    camp_entry = ChallengeCamp.query.filter_by(challenge_id=challenge.id).first()
+                    if camp_entry:
+                        camps_map[challenge.id] = camp_entry.camp
+                
+                # Injecter le script
+                inject_script = f"""
+<script>
+(function() {{
+    const campsMap = {camps_map};
+    
+    // Attendre que les challenges soient chargés
+    function addCampBadges() {{
+        document.querySelectorAll('.challenge-button[value]').forEach(button => {{
+            const challengeId = parseInt(button.getAttribute('value'));
+            const camp = campsMap[challengeId];
+            
+            if (camp && !button.querySelector('.camp-badge')) {{
+                const badge = document.createElement('div');
+                badge.className = 'camp-badge';
+                badge.style.cssText = `
+                    position: absolute;
+                    bottom: 8px;
+                    left: 8px;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background-color: ${{camp === 'blue' ? '#007bff' : '#dc3545'}};
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                    z-index: 10;
+                    pointer-events: none;
+                `;
+                badge.title = camp === 'blue' ? 'Camp Bleu' : 'Camp Rouge';
+                
+                // S'assurer que le bouton a position relative
+                button.style.position = 'relative';
+                button.appendChild(badge);
+            }}
+        }});
+    }}
+    
+    // Ajouter les badges au chargement
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', addCampBadges);
+    }} else {{
+        addCampBadges();
+    }}
+    
+    // Observer les changements (si challenges chargés dynamiquement)
+    const observer = new MutationObserver(addCampBadges);
+    observer.observe(document.body, {{ childList: true, subtree: true }});
+    
+    console.log('[CTFd Camps] Pastilles de camp injectées:', Object.keys(campsMap).length, 'challenges');
+}})();
+</script>
+"""
+                
+                # Injecter avant </body>
+                html = response.get_data(as_text=True)
+                if '</body>' in html:
+                    html = html.replace('</body>', inject_script + '</body>')
+                    response.set_data(html)
+        
+        return response
     
     # Hook pour enrichir automatiquement tous les challenges avec leur camp
     @app.before_request
@@ -413,6 +493,10 @@ def load(app):
     camps_bp = load_bp()
     app.register_blueprint(camps_bp)
     
-
+    # Ajouter le menu dans l'admin panel
+    register_admin_plugin_menu_bar(
+        title="Camps",
+        route="/admin/camps"
+    )
     
     print("[CTFd Camps] Plugin chargé avec succès ! 🔥")

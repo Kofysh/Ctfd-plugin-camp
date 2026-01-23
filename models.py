@@ -49,16 +49,15 @@ class TeamCamp(db.Model):
 class CampAccessLog(db.Model):
     """
     Log des tentatives d'accès aux challenges d'autres camps
-    Permet de détecter les équipes qui tentent de contourner le système
     """
     __tablename__ = 'camp_access_logs'
     
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), nullable=False)
     challenge_id = db.Column(db.Integer, db.ForeignKey('challenges.id', ondelete='CASCADE'), nullable=False)
-    team_camp = db.Column(db.String(10), nullable=False)  # Camp de l'équipe
-    challenge_camp = db.Column(db.String(10), nullable=False)  # Camp du challenge
-    ip_address = db.Column(db.String(50))
+    team_camp = db.Column(db.String(10), nullable=False)
+    challenge_camp = db.Column(db.String(10), nullable=False)
+    ip_address = db.Column(db.String(500))  # On met tout dedans : METHOD URL (IP: xxx)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relations
@@ -66,4 +65,4 @@ class CampAccessLog(db.Model):
     challenge = db.relationship('Challenges', foreign_keys=[challenge_id], lazy='select')
     
     def __repr__(self):
-        return f'<CampAccessLog team={self.team_id} challenge={self.challenge_id} at {self.timestamp}>'
+        return f'<CampAccessLog team={self.team_id} challenge={self.challenge_id}>'

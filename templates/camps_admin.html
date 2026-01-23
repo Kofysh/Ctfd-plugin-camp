@@ -33,6 +33,58 @@
                         </div>
                         
                         <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="show-public-stats" 
+                                       {% if config.show_public_stats %}checked{% endif %}>
+                                <label class="custom-control-label" for="show-public-stats">
+                                    <strong>Afficher publiquement le nombre d'équipes par camp</strong>
+                                    <br><small class="text-muted">Les équipes verront les statistiques sur /camps/select</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="show-challenge-badges" 
+                                       {% if config.show_challenge_badges %}checked{% endif %}>
+                                <label class="custom-control-label" for="show-challenge-badges">
+                                    <strong>Afficher les pastilles de camp sur les challenges</strong>
+                                    <br><small class="text-muted">Une petite bulle colorée 🔵/🔴 apparaîtra en bas à gauche de chaque challenge</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="enable-team-limits" 
+                                       {% if config.enable_team_limits %}checked{% endif %}>
+                                <label class="custom-control-label" for="enable-team-limits">
+                                    <strong>Limiter le nombre d'équipes par camp</strong>
+                                    <br><small class="text-muted">Empêche les équipes de rejoindre un camp une fois le quota atteint</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="team-limits-fields" style="display: {% if config.enable_team_limits %}block{% else %}none{% endif %};">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="max-blue-teams">🔵 <strong>Maximum Camp Bleu</strong></label>
+                                        <input type="number" class="form-control" id="max-blue-teams" min="0" 
+                                               value="{{ config.max_blue_teams }}" placeholder="0 = illimité">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="max-red-teams">🔴 <strong>Maximum Camp Rouge</strong></label>
+                                        <input type="number" class="form-control" id="max-red-teams" min="0" 
+                                               value="{{ config.max_red_teams }}" placeholder="0 = illimité">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
                             <label for="deadline"><strong>Date limite de changement</strong></label>
                             <input type="datetime-local" class="form-control" id="deadline" 
                                    value="{{ config.deadline[:16] if config.deadline else '' }}">
@@ -154,11 +206,21 @@
 </div>
 
 <script>
+// Afficher/masquer les champs de limite selon la checkbox
+document.getElementById('enable-team-limits').addEventListener('change', function() {
+    document.getElementById('team-limits-fields').style.display = this.checked ? 'block' : 'none';
+});
+
 // Sauvegarder la configuration
 document.getElementById('config-form').addEventListener('submit', function(e) {
     e.preventDefault();
     
     const allowChange = document.getElementById('allow-change').checked;
+    const showPublicStats = document.getElementById('show-public-stats').checked;
+    const showChallengeBadges = document.getElementById('show-challenge-badges').checked;
+    const enableTeamLimits = document.getElementById('enable-team-limits').checked;
+    const maxBlueTeams = parseInt(document.getElementById('max-blue-teams').value) || 0;
+    const maxRedTeams = parseInt(document.getElementById('max-red-teams').value) || 0;
     const deadline = document.getElementById('deadline').value;
     
     // Convertir en format ISO si une date est sélectionnée
@@ -175,6 +237,11 @@ document.getElementById('config-form').addEventListener('submit', function(e) {
         },
         body: JSON.stringify({
             allow_change: allowChange,
+            show_public_stats: showPublicStats,
+            show_challenge_badges: showChallengeBadges,
+            enable_team_limits: enableTeamLimits,
+            max_blue_teams: maxBlueTeams,
+            max_red_teams: maxRedTeams,
             deadline: deadlineISO
         })
     })
