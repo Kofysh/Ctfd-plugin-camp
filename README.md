@@ -26,6 +26,9 @@ Plugin CTFd pour créer un système de **camps adversaires** (Bleu vs Rouge) ave
 - **Pastilles colorées** : affichage visuel des camps sur les challenges (optionnel)
 - **Statistiques publiques** : affichage du nombre d'équipes par camp (optionnel)
 - Interface admin complète dans `/admin/camps`
+<br>
+<img width="1453" height="823" alt="Camp-Admin-challenges" src="https://github.com/user-attachments/assets/25069ce9-0daf-4a87-8c6c-21d418584c66" />
+
 
 ### 🔐 Sécurité
 - **Filtrage automatique** : les équipes ne voient QUE les challenges de leur camp + challenges neutres
