@@ -493,10 +493,5 @@ def load(app):
     camps_bp = load_bp()
     app.register_blueprint(camps_bp)
     
-    # Ajouter le menu dans l'admin panel
-    register_admin_plugin_menu_bar(
-        title="Camps",
-        route="/admin/camps"
-    )
     
     print("[CTFd Camps] Plugin chargé avec succès ! 🔥")
