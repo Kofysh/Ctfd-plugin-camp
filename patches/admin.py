@@ -1,65 +1,150 @@
-from CTFd.plugins import override_template
+"""
+Patches des templates admin pour ajouter les colonnes et champs "Camp".
+"""
+
+import logging
 import re
 
+from flask import Flask
 
-def patch_admin_challenges_listing(app):
-    """
-    Ajoute la colonne "Camp" dans la liste des challenges de l'admin
-    Patch: admin/challenges/challenges.html
-    """
-    
-    # Récupérer le template original ou déjà overridé
-    if 'admin/challenges/challenges.html' in app.overridden_templates:
-        original = app.overridden_templates['admin/challenges/challenges.html']
-    else:
-        with open('/opt/CTFd/CTFd/themes/admin/templates/challenges/challenges.html', 'r') as f:
-            original = f.read()
-    
-    # Ajouter la colonne "Camp" dans le header du tableau (avant "Category")
-    match_header = re.search(r'<th class="sort-col"><b>Category</b></th>', original)
-    if match_header:
-        pos = match_header.start()
-        original = original[:pos] + '<th class="sort-col"><b>Camp</b></th>' + original[pos:]
-    
-    # Ajouter la colonne "Camp" dans les lignes du tableau (avant "Category")
-    match_column = re.search(r'<td>{{ challenge.category }}</td>', original)
-    if match_column:
-        pos = match_column.start()
-        original = original[:pos] + '<td>{{ g.camps_map.get(challenge.id, "Non assigné") }}</td>' + original[pos:]
-    
-    # Override le template si les deux patchs ont réussi
-    if match_header and match_column:
-        override_template('admin/challenges/challenges.html', original)
-        print("[CTFd Camps] ✅ Patch admin challenges listing appliqué")
-    else:
-        print("[CTFd Camps] ⚠️ Échec du patch admin challenges listing")
+from CTFd.plugins import override_template
+
+logger = logging.getLogger("CTFdCamps")
+
+# Chemin de base des templates CTFd
+_THEMES_BASE = "/opt/CTFd/CTFd/themes"
 
 
-def patch_user_challenges_page(app):
-    """
-    Ajoute le badge de camp et le bouton "Changer de camp" sur la page /challenges
-    Patch: challenges.html
-    """
-    
+def apply_all_patches(app: Flask) -> None:
+    """Applique tous les patches de templates."""
+    _patch_challenges_listing(app)
+    _patch_teams_listing(app)
+    _patch_challenges_page(app)
+    _patch_create_challenge(app)
+    _patch_update_challenge(app)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _get_template(app: Flask, name: str, fallback_path: str) -> str | None:
+    """Récupère le contenu d'un template (overridé ou depuis le filesystem)."""
+    if name in app.overridden_templates:
+        return app.overridden_templates[name]
     try:
-        # Récupérer le template original
-        if 'challenges.html' in app.overridden_templates:
-            original = app.overridden_templates['challenges.html']
-        else:
-            # Le template challenges.html est dans le thème actif
-            theme = app.config.get('THEME_NAME', 'core')
-            template_path = f'/opt/CTFd/CTFd/themes/{theme}/templates/challenges.html'
-            with open(template_path, 'r') as f:
-                original = f.read()
-        
-        # Chercher juste après le titre "Challenges" dans le jumbotron
-        # Pattern : chercher </h1> dans le jumbotron
-        match = re.search(r'(<h1[^>]*>.*?Challenges.*?</h1>)', original, re.DOTALL)
-        
-        if match:
-            pos = match.end()
-            # Insérer le badge de camp après le titre
-            camp_badge = '''
+        with open(fallback_path, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.warning("[CTFd Camps] Template introuvable: %s", fallback_path)
+        return None
+
+
+def _apply_patch(template_name: str, content: str, success: bool) -> None:
+    """Applique un override de template si le patch a réussi."""
+    if success:
+        override_template(template_name, content)
+        logger.info("[CTFd Camps] Patch appliqué: %s", template_name)
+    else:
+        logger.warning("[CTFd Camps] Échec du patch: %s", template_name)
+
+
+# ---------------------------------------------------------------------------
+# Patches
+# ---------------------------------------------------------------------------
+
+def _patch_challenges_listing(app: Flask) -> None:
+    """Ajoute la colonne 'Camp' dans la liste admin des challenges."""
+    tpl_name = "admin/challenges/challenges.html"
+    content = _get_template(
+        app, tpl_name,
+        f"{_THEMES_BASE}/admin/templates/challenges/challenges.html",
+    )
+    if not content:
+        return
+
+    header = re.search(r'<th class="sort-col"><b>Category</b></th>', content)
+    column = re.search(r"<td>{{ challenge.category }}</td>", content)
+
+    if header:
+        pos = header.start()
+        content = content[:pos] + '<th class="sort-col"><b>Camp</b></th>' + content[pos:]
+
+    # Recalculer après insertion
+    column = re.search(r"<td>{{ challenge.category }}</td>", content)
+    if column:
+        pos = column.start()
+        camp_cell = '<td>{{ g.camps_map.get(challenge.id, "Non assigné") }}</td>'
+        content = content[:pos] + camp_cell + content[pos:]
+
+    _apply_patch(tpl_name, content, bool(header and column))
+
+
+def _patch_teams_listing(app: Flask) -> None:
+    """Ajoute la colonne 'Camp' dans la liste admin des équipes."""
+    tpl_name = "admin/teams/teams.html"
+    content = _get_template(
+        app, tpl_name,
+        f"{_THEMES_BASE}/admin/templates/teams/teams.html",
+    )
+    if not content:
+        return
+
+    # Éviter de patcher deux fois
+    if "<b>Camp</b>" in content:
+        logger.info("[CTFd Camps] Patch teams déjà appliqué, ignoré")
+        return
+
+    header = re.search(
+        r'<th class="sort-col text-center px-0"><b>Hidden</b></th>',
+        content,
+    )
+    column = re.search(
+        r'<td class="team-hidden d-md-table-cell d-lg-table-cell text-center"',
+        content,
+    )
+
+    if header:
+        pos = header.start()
+        content = (
+            content[:pos]
+            + '<th class="sort-col text-center"><b>Camp</b></th>\n\t\t\t\t\t\t'
+            + content[pos:]
+        )
+
+    # Recalculer après insertion
+    column = re.search(
+        r'<td class="team-hidden d-md-table-cell d-lg-table-cell text-center"',
+        content,
+    )
+    if column:
+        pos = column.start()
+        camp_cell = (
+            '<td class="team-camp text-center">'
+            '{{ g.teams_camps_map.get(team.id, "Non assigné") }}</td>\n\n\t\t\t\t\t\t'
+        )
+        content = content[:pos] + camp_cell + content[pos:]
+
+    _apply_patch(tpl_name, content, bool(header and column))
+
+
+def _patch_challenges_page(app: Flask) -> None:
+    """Ajoute le badge de camp et le bouton 'Changer de camp' sur /challenges."""
+    tpl_name = "challenges.html"
+    theme = app.config.get("THEME_NAME", "core")
+    content = _get_template(
+        app, tpl_name,
+        f"{_THEMES_BASE}/{theme}/templates/challenges.html",
+    )
+    if not content:
+        return
+
+    match = re.search(r"(<h1[^>]*>.*?Challenges.*?</h1>)", content, re.DOTALL)
+    if not match:
+        logger.warning("[CTFd Camps] Titre Challenges non trouvé dans le template")
+        return
+
+    badge_html = """
             {% if session.get('id') %}
                 {% set team = get_current_team() %}
                 {% if team %}
@@ -81,96 +166,33 @@ def patch_user_challenges_page(app):
                     {% endif %}
                 {% endif %}
             {% endif %}
-'''
-            original = original[:pos] + camp_badge + original[pos:]
-            
-            override_template('challenges.html', original)
-            print("[CTFd Camps] ✅ Patch user challenges page appliqué")
-        else:
-            print("[CTFd Camps] ⚠️ Échec du patch user challenges page (titre non trouvé)")
-    
-    except Exception as e:
-        print(f"[CTFd Camps] ⚠️ Erreur lors du patch user challenges: {e}")
+"""
+    pos = match.end()
+    content = content[:pos] + badge_html + content[pos:]
+    _apply_patch(tpl_name, content, True)
 
 
-def patch_admin_teams_listing(app):
-    """
-    Ajoute la colonne "Camp" dans la liste des équipes de l'admin
-    Patch: admin/teams/teams.html
-    """
-    
-    try:
-        # Récupérer le template original ou déjà overridé
-        if 'admin/teams/teams.html' in app.overridden_templates:
-            original = app.overridden_templates['admin/teams/teams.html']
-            print("[CTFd Camps DEBUG] Template déjà overridé trouvé")
-        else:
-            with open('/opt/CTFd/CTFd/themes/admin/templates/teams/teams.html', 'r') as f:
-                original = f.read()
-            print("[CTFd Camps DEBUG] Template lu depuis le filesystem")
-        
-        # Vérifier si le patch a déjà été appliqué
-        camp_count = original.count('<b>Camp</b>')
-        print(f"[CTFd Camps DEBUG] Nombre de '<b>Camp</b>' trouvés: {camp_count}")
-        
-        if '<b>Camp</b>' in original:
-            print("[CTFd Camps] ℹ️ Patch admin teams déjà appliqué, ignoré")
-            return
-        
-        # Ajouter la colonne "Camp" dans le header du tableau (avant "Hidden")
-        match_header = re.search(r'<th class="sort-col text-center px-0"><b>Hidden</b></th>', original)
-        if match_header:
-            pos = match_header.start()
-            print(f"[CTFd Camps DEBUG] Header trouvé à position {pos}")
-            original = original[:pos] + '<th class="sort-col text-center"><b>Camp</b></th>\n\t\t\t\t\t\t' + original[pos:]
-        else:
-            print("[CTFd Camps DEBUG] Header NOT trouvé!")
-        
-        # Ajouter la colonne "Camp" dans les lignes du tableau (avant "Hidden")
-        match_column = re.search(r'<td class="team-hidden d-md-table-cell d-lg-table-cell text-center"', original)
-        if match_column:
-            pos = match_column.start()
-            print(f"[CTFd Camps DEBUG] Column trouvée à position {pos}")
-            original = original[:pos] + '<td class="team-camp text-center">{{ g.teams_camps_map.get(team.id, "Non assigné") }}</td>\n\n\t\t\t\t\t\t' + original[pos:]
-        else:
-            print("[CTFd Camps DEBUG] Column NOT trouvée!")
-        
-        # Override le template si les deux patchs ont réussi
-        if match_header and match_column:
-            override_template('admin/teams/teams.html', original)
-            print("[CTFd Camps] ✅ Patch admin teams listing appliqué")
-        else:
-            print("[CTFd Camps] ⚠️ Échec du patch admin teams listing")
-    
-    except Exception as e:
-        print(f"[CTFd Camps] ⚠️ Erreur lors du patch admin teams: {e}")
+def _patch_create_challenge(app: Flask) -> None:
+    """Ajoute le champ 'Camp' dans le formulaire de création de challenge."""
+    tpl_name = "admin/challenges/create.html"
+    content = _get_template(
+        app, tpl_name,
+        f"{_THEMES_BASE}/admin/templates/challenges/create.html",
+    )
+    if not content:
+        return
 
+    match = re.search(r"{% block category %}", content)
+    if not match:
+        _apply_patch(tpl_name, content, False)
+        return
 
-def patch_create_challenge(app):
-    """
-    Ajoute le champ "Camp" dans le formulaire de création de challenge
-    Patch: admin/challenges/create.html
-    """
-    
-    # Récupérer le template original ou déjà overridé
-    if 'admin/challenges/create.html' in app.overridden_templates:
-        original = app.overridden_templates['admin/challenges/create.html']
-    else:
-        with open('/opt/CTFd/CTFd/themes/admin/templates/challenges/create.html', 'r') as f:
-            original = f.read()
-    
-    # Insérer le champ "Camp" avant le bloc "category"
-    match = re.search(r'{% block category %}', original)
-    if match:
-        pos = match.start()
-        original = original[:pos] + """
+    camp_field = """
     {% block camp %}
     <div class="form-group">
         <label>
             Camp:<br>
-            <small class="form-text text-muted">
-                Choisir le camp pour ce challenge
-            </small>
+            <small class="form-text text-muted">Choisir le camp pour ce challenge</small>
         </label>
         <select class="form-control" name="camp" required>
             <option value="">-- Sélectionner un camp --</option>
@@ -179,37 +201,33 @@ def patch_create_challenge(app):
         </select>
     </div>
     {% endblock %}
-    """ + original[pos:]
-        
-        override_template('admin/challenges/create.html', original)
-        print("[CTFd Camps] ✅ Patch create challenge appliqué")
-    else:
-        print("[CTFd Camps] ⚠️ Échec du patch create challenge")
+    """
+    pos = match.start()
+    content = content[:pos] + camp_field + content[pos:]
+    _apply_patch(tpl_name, content, True)
 
 
-def patch_update_challenge(app):
-    """
-    Ajoute le champ "Camp" dans le formulaire de modification de challenge
-    Patch: admin/challenges/update.html
-    """
-    
-    # Récupérer le template original ou déjà overridé
-    if 'admin/challenges/update.html' in app.overridden_templates:
-        original = app.overridden_templates['admin/challenges/update.html']
-    else:
-        with open('/opt/CTFd/CTFd/themes/admin/templates/challenges/update.html', 'r') as f:
-            original = f.read()
-    
-    # Insérer le champ "Camp" avant le bloc "category"
-    match = re.search(r'{% block category %}', original)
-    if match:
-        pos = match.start()
-        original = original[:pos] + """
+def _patch_update_challenge(app: Flask) -> None:
+    """Ajoute le champ 'Camp' dans le formulaire de modification de challenge."""
+    tpl_name = "admin/challenges/update.html"
+    content = _get_template(
+        app, tpl_name,
+        f"{_THEMES_BASE}/admin/templates/challenges/update.html",
+    )
+    if not content:
+        return
+
+    match = re.search(r"{% block category %}", content)
+    if not match:
+        _apply_patch(tpl_name, content, False)
+        return
+
+    camp_field = """
     {% block camp %}
     {% set challenge_camp = get_challenge_camp(challenge.id) %}
     <div class="form-group">
         <label>
-            Camp<br>
+            Camp:<br>
             <small class="form-text text-muted">Camp du challenge</small>
         </label>
         <select class="form-control chal-camp" name="camp" required>
@@ -219,9 +237,7 @@ def patch_update_challenge(app):
         </select>
     </div>
     {% endblock %}
-    """ + original[pos:]
-        
-        override_template('admin/challenges/update.html', original)
-        print("[CTFd Camps] ✅ Patch update challenge appliqué")
-    else:
-        print("[CTFd Camps] ⚠️ Échec du patch update challenge")
+    """
+    pos = match.start()
+    content = content[:pos] + camp_field + content[pos:]
+    _apply_patch(tpl_name, content, True)
