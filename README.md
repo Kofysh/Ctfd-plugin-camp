@@ -12,6 +12,9 @@ Plugin CTFd pour créer un système de **camps adversaires** (Bleu vs Rouge) ave
 - **Challenges neutres** : visibles par tous les camps (aucun camp assigné)
 - Page de sélection de camp pour les équipes (`/camps/select`)
 - Badge visuel du camp actuel sur la page `/challenges`
+<br>
+<img width="1215" height="838" alt="Choix-Camp" src="https://github.com/user-attachments/assets/31119793-83a6-4f8e-a64c-eba45e293971" />
+
 
 ### 🔒 Gestion des Restrictions
 - **Deadline de changement** : bloquer les changements après une date limite
@@ -89,6 +92,7 @@ Au démarrage, vous devriez voir dans les logs :
    - ✅ **Afficher les pastilles de camp sur les challenges** : ajoute des bulles 🔵/🔴 sur les cartes de challenges
    - ✅ **Limiter le nombre d'équipes par camp** : définir un quota max par camp
    - 📅 **Date limite de changement** : bloquer les changements après cette date
+   - En tant qu'administrateur CTFd vous voyez tous les challenges peut importe votre camp. 
 
 3. **Assigner les camps aux challenges** :
    - Lors de la création/modification d'un challenge
@@ -98,6 +102,10 @@ Au démarrage, vous devriez voir dans les logs :
 4. **Assigner les camps aux équipes** (optionnel) :
    - Colonne "Camp" visible dans `/admin/teams`
    - Les équipes peuvent choisir leur camp sur `/camps/select`
+
+<br>
+<img width="1119" height="866" alt="Camp-Admin" src="https://github.com/user-attachments/assets/9302659f-291e-4c48-9cc8-2c3eb6add179" />
+
 
 ### Côté Équipes
 
@@ -114,6 +122,8 @@ Au démarrage, vous devriez voir dans les logs :
 3. **Restrictions** :
    - Redirection automatique vers `/camps/select` si aucun camp choisi
    - Impossible d'accéder aux challenges des autres camps (403 Forbidden)
+<br>
+<img width="1413" height="833" alt="Camp-user" src="https://github.com/user-attachments/assets/89319a8f-2760-427e-823d-4cdf33bbad66" />
 
 ### Logs de Sécurité
 
@@ -131,6 +141,8 @@ Au démarrage, vous devriez voir dans les logs :
    - Voir les détails d'une tentative (bouton "👁️ Voir requête")
    - Supprimer tous les logs
    - Les 100 dernières tentatives sont affichées
+<br>
+<img width="1507" height="740" alt="Camp-logs" src="https://github.com/user-attachments/assets/2d1c7653-b148-4a02-8636-0ff757b2391e" />
 
 ---
 
