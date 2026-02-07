@@ -17,7 +17,6 @@ Plugin CTFd pour créer un système de **camps adversaires** (Bleu vs Rouge) ave
 - **Deadline de changement** : bloquer les changements après une date limite
 - **Verrouillage des camps** : empêcher tout changement une fois le camp choisi
 - **Quotas par camp** : limiter le nombre d'équipes par camp (ex: max 10 équipes bleues)
-- Vérification backend : impossible de contourner les restrictions via requêtes forgées
 
 ### 🎨 Interface
 - **Design adaptatif** : fonctionne en mode dark et light
@@ -28,6 +27,7 @@ Plugin CTFd pour créer un système de **camps adversaires** (Bleu vs Rouge) ave
 ### 🔐 Sécurité
 - **Filtrage automatique** : les équipes ne voient QUE les challenges de leur camp + challenges neutres
 - **Protection API** : accès refusé (403 Forbidden) aux challenges des autres camps
+- Vérification backend : impossible de contourner les restrictions via requêtes forgées
 - **Logs de sécurité** : enregistrement des tentatives d'accès illégitimes avec IP, requête et timestamp
 - **Validation stricte** : seulement 'blue' ou 'red' acceptés
 
@@ -40,8 +40,6 @@ Plugin CTFd pour créer un système de **camps adversaires** (Bleu vs Rouge) ave
 ```bash
 cd /opt/CTFd/CTFd/plugins
 git clone https://github.com/votre-repo/ctfd-camps.git
-# OU
-unzip ctfd-camps.zip
 ```
 
 ### 2. Vérifier la structure
@@ -95,7 +93,7 @@ Au démarrage, vous devriez voir dans les logs :
 3. **Assigner les camps aux challenges** :
    - Lors de la création/modification d'un challenge
    - Colonne "Camp" visible dans `/admin/challenges`
-   - Laisser vide = challenge neutre (visible par tous)
+   - Laisser vide = challenge neutre (visible pour les deux camps)
 
 4. **Assigner les camps aux équipes** (optionnel) :
    - Colonne "Camp" visible dans `/admin/teams`
@@ -190,61 +188,23 @@ Pour ajouter plus de camps ou changer les noms, modifiez :
 
 ---
 
-## 🔍 Dépannage
+## Support
 
-### Le plugin ne se charge pas
+Pour toute question ou problème, ouvrez une [issue](https://github.com/HACK-OLYTE/Ctfd-plugin-camp/issues). <br>
+Ou contactez nous sur le site de l'association Hack'olyte : [contact](https://hackolyte.fr/contact/).
 
-**Vérifiez les logs au démarrage de CTFd :**
-```bash
-docker logs ctfd-1 | grep "CTFd Camps"
-```
 
-**Erreurs courantes :**
-- ❌ Structure de dossiers incorrecte
-- ❌ Permissions de fichiers
-- ❌ Incompatibilité de version CTFd
+## Contribuer
 
-### Les challenges ne se filtrent pas
+Les contributions sont les bienvenues !  
+Vous pouvez :
 
-**Vérifiez que :**
-1. L'équipe a bien un camp assigné
-2. Les challenges ont un camp assigné (vide = neutre)
-3. L'option est activée dans `/admin/camps`
+- Signaler des bugs
+- Proposer de nouvelles fonctionnalités
+- Soumettre des pull requests
 
-**Debug dans la console du navigateur :**
-```javascript
-fetch('/api/v1/camps/challenges')
-  .then(res => res.json())
-  .then(data => console.log(data));
-```
 
-### Les pastilles de camp n'apparaissent pas
+## Licences 
 
-**Vérifiez que :**
-1. L'option "Afficher les pastilles" est cochée dans `/admin/camps`
-2. Vous n'êtes pas en mode admin (les admins voient tous les challenges)
-3. Le JavaScript s'injecte correctement (vérifier dans l'inspecteur)
-
----
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! N'hésitez pas à :
-- 🐛 Signaler des bugs
-- 💡 Proposer des nouvelles fonctionnalités
-- 📖 Améliorer la documentation
-- 🔧 Soumettre des pull requests
-
----
-
-## 📝 License
-
-MIT License - Libre d'utilisation, de modification et de distribution.
-
----
-
-## 🎉 Remerciements
-
-Développé pour CTFd par Hack'olyte
-
-**Bon CTF ! 🚀🔥**
+Ce plugin est sous licence [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.fr).  
+Merci de ne pas retirer le footer de chaque fichier HTML sans l'autorisation préalable de l'association Hack'olyte.
